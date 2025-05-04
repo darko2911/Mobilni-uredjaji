@@ -1,0 +1,106 @@
+package com.example.bitcoin;
+
+import android.app.ProgressDialog;
+import android.os.Bundle;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.view.Menu;
+import android.view.MenuItem;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import org.json.JSONObject;
+
+import java.io.IOException;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
+public class MainActivity extends AppCompatActivity {
+
+    public static final String BPI_ENDPOINT = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,eur,gbp"; // URL za dohvat cijene Bitcoina
+    private OkHttpClient okHttpClient = new OkHttpClient(); // Klijent za HTTP zahtjeve
+    private ProgressDialog progressDialog; // Dijalog za prikaz učitavanja
+    private TextView txt; // Tekstualni prikaz rezultata
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState); // Poziv nadklase
+        setContentView(R.layout.activity_main); // Povezivanje sa XML layout-om
+        txt = findViewById(R.id.txt); // Povezivanje TextView-a iz layout-a
+
+        progressDialog = new ProgressDialog(this); // Inicijalizacija ProgressDialoga
+        progressDialog.setTitle("BPI Loading"); // Postavljanje naslova
+        progressDialog.setMessage("Wait ..."); // Postavljanje poruke
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu, menu); // Učitavanje menija iz resursa
+        return super.onCreateOptionsMenu(menu); // Poziv nadklase
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_load) { // Ako je odabrana opcija "load"
+            load(); // Poziv metode za učitavanje podataka
+            return true;
+        }
+        return super.onOptionsItemSelected(item); // Inače, nastavi s default ponašanjem
+    }
+
+    private void load() {
+        Request request = new Request.Builder()
+                .url(BPI_ENDPOINT) // Postavljanje URL-a za zahtjev
+                .build(); // Izrada zahtjeva
+
+        progressDialog.show(); // Prikazivanje dijaloga za učitavanje
+
+        okHttpClient.newCall(request).enqueue(new Callback() { // Pokretanje asinkronog HTTP zahtjeva
+            @Override
+            public void onFailure(Call call, IOException e) {
+                runOnUiThread(() -> { // Povratak na glavnu nit za UI promjene
+                    progressDialog.dismiss(); // Sakrivanje dijaloga
+                    Toast.makeText(MainActivity.this, "Greška pri učitavanju podataka: " + e.getMessage(), Toast.LENGTH_LONG).show(); // Prikazivanje greške
+                });
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                final String body = response.body().string(); // Dohvaćanje tijela odgovora kao string
+
+                runOnUiThread(() -> { // Povratak na glavnu nit za UI promjene
+                    progressDialog.dismiss(); // Sakrivanje dijaloga
+                    parseBpiResponse(body); // Parsiranje odgovora
+                });
+            }
+        });
+    }
+
+    private void parseBpiResponse(String body) {
+        try {
+            StringBuilder builder = new StringBuilder(); // Za formatiranje prikaza
+
+            JSONObject jsonObject = new JSONObject(body); // Kreiranje JSON objekta iz odgovora
+            JSONObject bitcoinObject = jsonObject.getJSONObject("bitcoin"); // Dohvaćanje objekta "bitcoin"
+
+            double usd = bitcoinObject.getDouble("usd"); // Dohvaćanje vrijednosti u USD
+            double gbp = bitcoinObject.getDouble("gbp"); // Dohvaćanje vrijednosti u GBP
+            double eur = bitcoinObject.getDouble("eur"); // Dohvaćanje vrijednosti u EUR
+
+            builder.append("USD: ").append(usd).append(" $\n"); // Dodavanje USD vrijednosti
+            builder.append("GBP: ").append(gbp).append(" £\n"); // Dodavanje GBP vrijednosti
+            builder.append("EUR: ").append(eur).append(" €\n"); // Dodavanje EUR vrijednosti
+
+            txt.setText(builder.toString()); // Postavljanje formatiranog teksta u TextView
+
+        } catch (Exception e) {
+            e.printStackTrace(); // Ispis greške u log
+            Toast.makeText(MainActivity.this, "Greška pri parsiranju podataka.", Toast.LENGTH_SHORT).show(); // Prikazivanje greške korisniku
+        }
+    }
+}
+
